@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PhishGuard Pro - Forensic Intelligence Dossier</title>
+    <style>
+        body { font-family: 'Inter', -apple-system, sans-serif; padding: 50px; background: #fff; color: #111; line-height: 1.6; }
+        .container { max-width: 850px; margin: 0 auto; }
+        .header { border-bottom: 3px solid #000; padding-bottom: 25px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .logo { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+        .status-box { padding: 15px 25px; border-radius: 12px; font-weight: 700; text-transform: uppercase; font-size: 14px; }
+        .status-SAFE { background: #e2fbe8; color: #1a7f37; }
+        .status-SUSPICIOUS { background: #fff4e5; color: #b35900; }
+        .status-DANGEROUS { background: #ffebe9; color: #cf222e; }
+        
+        .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+        .meta-item h4 { margin: 0 0 5px 0; font-size: 11px; text-transform: uppercase; color: #666; }
+        .meta-item p { margin: 0; font-weight: 600; font-size: 16px; word-break: break-all; }
+
+        .section { margin-bottom: 50px; }
+        .section h2 { border-left: 5px solid #000; padding-left: 15px; font-size: 20px; margin-bottom: 20px; }
+        
+        .intel-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .intel-card { background: #f8f9fa; padding: 20px; border-radius: 14px; border: 1px solid #eee; }
+        .intel-card h4 { margin: 0 0 8px 0; font-size: 12px; color: #666; }
+        .intel-card p { margin: 0; font-weight: 700; font-size: 16px; }
+
+        .vulnerability-list { list-style: none; padding: 0; }
+        .vulnerability-item { padding: 15px 0; border-bottom: 1px solid #eee; }
+        .vulnerability-item:last-child { border-bottom: none; }
+        .vulnerability-header { display: flex; justify-content: space-between; font-weight: 700; }
+        .vulnerability-desc { font-size: 14px; color: #555; margin-top: 4px; }
+
+        .footer { margin-top: 80px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #888; text-align: center; }
+
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+            .container { width: 100%; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <div class="logo">🛡️ PhishGuard Pro</div>
+                <p style="margin: 5px 0 0; color: #666;">Professional Forensic Intelligence Report</p>
+            </div>
+            <div id="badge" class="status-box">Loading...</div>
+        </div>
+
+        <div class="meta">
+            <div class="meta-item">
+                <h4>Analysis Target</h4>
+                <p id="target-url">-</p>
+            </div>
+            <div class="meta-item">
+                <h4>Generation Timestamp</h4>
+                <p id="timestamp">-</p>
+            </div>
+        </div>
+
+        <div class="section">
+          <h2>🧠 AI Intelligence Synthesis</h2>
+          <p id="ai-summary" style="font-size: 1.1rem;"></p>
+        </div>
+
+        <div class="section">
+          <h2>🌐 Tactical OSINT Footprint</h2>
+          <div class="intel-grid">
+            <div class="intel-card"><h4>IP Infrastructure</h4><p id="osint-ip">-</p></div>
+            <div class="intel-card"><h4>ASN / Netblock</h4><p id="osint-as">-</p></div>
+            <div class="intel-card"><h4>Organization</h4><p id="osint-org">-</p></div>
+            <div class="intel-card"><h4>Regional Location</h4><p id="osint-loc">-</p></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>🔍 Deep-Layer Vulnerabilities</h2>
+          <div id="vulnerabilities" class="vulnerability-list"></div>
+        </div>
+
+        <div class="footer">
+            Confidential Security Intelligence • Generated via PhishGuard Pro Local Forensic Engine • All Rights Reserved
+        </div>
+    </div>
+
+    <script>
+        // Data hydration from storage
+        chrome.storage.local.get(['last_report'], (data) => {
+            const r = data.last_report;
+            if (!r) return;
+
+            document.getElementById('badge').textContent = `${r.status} [SCORE: ${r.score}/100]`;
+            document.getElementById('badge').className = `status-box status-${r.status}`;
+            document.getElementById('target-url').textContent = r.url;
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            document.getElementById('ai-summary').textContent = r.explanation;
+            
+            document.getElementById('osint-ip').textContent = r.details.ip;
+            document.getElementById('osint-as').textContent = r.details.hostInfo?.as || 'Unknown';
+            document.getElementById('osint-org').textContent = r.details.hostInfo?.org || 'Unknown';
+            document.getElementById('osint-loc').textContent = `${r.details.hostInfo?.city}, ${r.details.hostInfo?.country}`;
+
+            const vList = document.getElementById('vulnerabilities');
+            r.details.riskFactors.forEach(f => {
+                vList.innerHTML += `
+                    <div class="vulnerability-item">
+                        <div class="vulnerability-header"><span>${f.rule}</span><span>(+${f.points} pts)</span></div>
+                        <div class="vulnerability-desc">${f.desc}</div>
+                    </div>
+                `;
+            });
+
+            // Trigger Print Dialog immediately
+            setTimeout(() => window.print(), 800);
+        });
+    </script>
+</body>
+</html>
