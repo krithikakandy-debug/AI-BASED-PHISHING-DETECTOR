@@ -1,3 +1,5 @@
+importScripts("hashchain.js");
+
 const BACKEND_URL = "http://localhost:3000";
 
 function getActiveTabUrl(callback) {
@@ -34,10 +36,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       body: JSON.stringify({ url: message.url })
     })
       .then((res) => res.json())
-      .then((data) => sendResponse({ data }))
+      .then(async (data) => {
+        await logScan(message.url, data);
+        sendResponse({ data });
+      })
       .catch(() => sendResponse({ error: true }));
     return true;
   }
+
+  if (message.type === "OPEN_SIDE_PANEL" && sender.tab) {
+    chrome.sidePanel.open({ tabId: sender.tab.id }).catch(() => {});
+  }
 });
+
+// Single choke point for the forensic audit trail: every analysis, whether triggered by the
+// side panel or the in-page content script, routes through this ANALYZE_URL handler and gets logged.
+async function logScan(url, data) {
+  if (data?.error) return;
+  try {
+    const { auditLog = [] } = await chrome.storage.local.get("auditLog");
+    const entry = await pgAppendAuditEntry(auditLog, {
+      url,
+      score: data.score,
+      status: data.status,
+      riskFactors: data.riskFactors
+    });
+    auditLog.push(entry);
+    if (auditLog.length > 500) auditLog.shift();
+    await chrome.storage.local.set({ auditLog });
+  } catch (err) {
+    console.error("Audit log error:", err);
+  }
+}
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);

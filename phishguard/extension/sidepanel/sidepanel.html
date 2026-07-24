@@ -75,6 +75,28 @@
       </div>
 
       <div class="section">
+        <div class="section-header"><span class="dot red"></span> FORENSIC SIGNALS</div>
+        <div class="intel-grid">
+          <div class="intel-cell">
+            <div class="intel-cell-label">DOMAIN AGE</div>
+            <div class="intel-cell-value" id="forDomainAge">--</div>
+          </div>
+          <div class="intel-cell">
+            <div class="intel-cell-label">SSL ISSUER</div>
+            <div class="intel-cell-value" id="forSSL">--</div>
+          </div>
+          <div class="intel-cell">
+            <div class="intel-cell-label">SSL EXPIRES IN</div>
+            <div class="intel-cell-value" id="forSSLExpiry">--</div>
+          </div>
+          <div class="intel-cell">
+            <div class="intel-cell-label">EMAIL AUTH</div>
+            <div class="intel-cell-value" id="forDns">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
         <div class="section-header"><span class="dot red"></span> SIGNAL BREAKDOWN</div>
         <div id="signalList"></div>
       </div>
@@ -111,6 +133,15 @@
         <button class="btn btn-dark" id="copyBtn">Copy Intel</button>
       </div>
 
+      <div class="section">
+        <div class="section-header"><span class="dot red"></span> FORENSIC AUDIT TRAIL</div>
+        <div id="auditList" class="audit-list"></div>
+        <div class="actions" style="margin-top: 8px;">
+          <button class="btn btn-dark" id="verifyChainBtn">Verify Chain Integrity</button>
+          <button class="btn btn-white" id="exportAuditBtn">Export Evidence Bundle</button>
+        </div>
+      </div>
+
       <div class="auto-intel"><span class="pulse-dot"></span> Autonomous Intelligence Active</div>
     </div>
 
@@ -120,6 +151,7 @@
       <button class="btn btn-dark" id="retryBtn">Retry</button>
     </div>
   </div>
+  <script src="../hashchain.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 </html>

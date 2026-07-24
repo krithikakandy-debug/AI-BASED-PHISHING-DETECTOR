@@ -7,6 +7,40 @@ const SUSPICIOUS_KEYWORDS = [
 ];
 const URL_SHORTENERS = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "rebrand.ly"];
 
+const BRAND_DOMAINS = [
+  "google.com", "facebook.com", "amazon.com", "apple.com", "microsoft.com", "paypal.com",
+  "netflix.com", "instagram.com", "linkedin.com", "twitter.com", "x.com", "bankofamerica.com",
+  "wellsfargo.com", "chase.com", "citibank.com", "dropbox.com", "adobe.com", "ebay.com",
+  "yahoo.com", "outlook.com", "gmail.com", "icloud.com", "github.com", "binance.com",
+  "coinbase.com", "steamcommunity.com", "spotify.com", "whatsapp.com", "irs.gov", "hmrc.gov.uk"
+];
+
+function levenshtein(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+// ponytail: brand list is a hardcoded top-30, expand via a data file if false-negative reports come in
+function detectTyposquatting(hostname) {
+  const root = hostname.split(".").slice(-2).join(".");
+  if (BRAND_DOMAINS.includes(root)) return null;
+  let closest = null;
+  let minDist = Infinity;
+  for (const brand of BRAND_DOMAINS) {
+    const d = levenshtein(root, brand);
+    if (d < minDist) { minDist = d; closest = brand; }
+  }
+  if (closest && minDist > 0 && minDist <= 2) return { brand: closest, distance: minDist };
+  return null;
+}
+
 function analyzeUrl(rawUrl) {
   let score = 0;
   const riskFactors = [];
@@ -75,6 +109,11 @@ function analyzeUrl(rawUrl) {
   flags["Numbers in Domain"] = hasNums && !isIp;
   if (hasNums && !isIp) { score += 10; riskFactors.push("Numbers in domain — possible homograph attack"); }
 
+  const typosquat = isIp ? null : detectTyposquatting(hostname);
+  details["Brand Impersonation"] = typosquat ? `Looks like ${typosquat.brand} (edit distance ${typosquat.distance})` : "None detected";
+  flags["Brand Impersonation"] = Boolean(typosquat);
+  if (typosquat) { score += 35; riskFactors.push(`Domain closely resembles ${typosquat.brand} — likely typosquatting/brand impersonation`); }
+
   details["Domain"] = hostname;
   details["Protocol"] = protocol.replace(":", "").toUpperCase();
   flags["Domain"] = false;
@@ -89,4 +128,4 @@ function scoreToStatus(score) {
   return "dangerous";
 }
 
-module.exports = { analyzeUrl, scoreToStatus };
+module.exports = { analyzeUrl, scoreToStatus, detectTyposquatting };

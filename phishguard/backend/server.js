@@ -1,5 +1,6 @@
 require("dotenv").config();
 const dns = require("dns").promises;
+const tls = require("tls");
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
@@ -17,29 +18,34 @@ app.post("/analyze", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "Missing url" });
   console.log(`[PhishGuard] Analyzing: ${url}`);
-  const { score, riskFactors, details, flags } = analyzeUrl(url);
+  const hostname = safeHostname(url);
+  let { score, riskFactors, details, flags } = analyzeUrl(url);
+  const [intel, forensics] = await Promise.all([getIntelligence(url), getForensics(hostname, url)]);
+  ({ score, riskFactors, details, flags } = applyForensicScoring({ score, riskFactors, details, flags, forensics }));
   const status = scoreToStatus(score);
-  const [intel, explanation] = await Promise.all([
-    getIntelligence(url),
-    getAiExplanation({ url, score, status, riskFactors })
-  ]);
-  res.json({ score, status, explanation, details, flags, intel, riskFactors });
+  const explanation = await getAiExplanation({ url, score, status, riskFactors });
+  res.json({ score, status, explanation, details, flags, intel, forensics, riskFactors });
 });
 
 app.post("/deep-scan", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "Missing url" });
   console.log(`[PhishGuard] Deep scan: ${url}`);
-  const { score, riskFactors, details, flags } = analyzeUrl(url);
+  const hostname = safeHostname(url);
+  let { score, riskFactors, details, flags } = analyzeUrl(url);
+  const [intel, forensics] = await Promise.all([getIntelligence(url), getForensics(hostname, url)]);
+  ({ score, riskFactors, details, flags } = applyForensicScoring({ score, riskFactors, details, flags, forensics }));
   const status = scoreToStatus(score);
-  const intel = await getIntelligence(url);
   const deepAnalysis = await getDeepAnalysis({ url, score, status, riskFactors, intel });
-  res.json({ score, status, details, flags, intel, riskFactors, deepAnalysis });
+  res.json({ score, status, details, flags, intel, forensics, riskFactors, deepAnalysis });
 });
 
+function safeHostname(url) {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
 async function getIntelligence(url) {
-  let hostname = "";
-  try { hostname = new URL(url).hostname; } catch { hostname = url; }
+  const hostname = safeHostname(url);
   const [abuseipdb, virustotal, urlscan] = await Promise.allSettled([
     checkAbuseIPDB(hostname),
     checkVirusTotal(url),
@@ -50,6 +56,104 @@ async function getIntelligence(url) {
     virustotal: virustotal.status === "fulfilled" ? virustotal.value : { result: "Clean", malicious: 0 },
     urlscan: urlscan.status === "fulfilled" ? urlscan.value : { result: "Verified" }
   };
+}
+
+// Forensic signals: domain age (RDAP, no key needed), SSL certificate inspection (raw TLS handshake),
+// and DNS email-auth posture (SPF/DMARC/MX). All free/keyless data sources for pentest & forensic use.
+async function getForensics(hostname, url) {
+  const isHttps = url.toLowerCase().startsWith("https");
+  const [domainAge, ssl, dnsSecurity] = await Promise.allSettled([
+    getDomainAge(hostname),
+    isHttps ? getSSLInfo(hostname) : Promise.resolve({ error: true, issuer: "N/A — not HTTPS" }),
+    getDnsSecurity(hostname)
+  ]);
+  return {
+    domainAge: domainAge.status === "fulfilled" ? domainAge.value : { ageDays: null, registered: "Unknown" },
+    ssl: ssl.status === "fulfilled" ? ssl.value : { error: true, issuer: "Unavailable" },
+    dns: dnsSecurity.status === "fulfilled" ? dnsSecurity.value : { hasSpf: false, hasDmarc: false, hasMx: false }
+  };
+}
+
+async function getDomainAge(hostname) {
+  try {
+    const root = hostname.split(".").slice(-2).join(".");
+    const response = await axios.get(`https://rdap.org/domain/${root}`, { timeout: 5000 });
+    const events = response.data.events || [];
+    const registration = events.find((e) => e.eventAction === "registration");
+    if (!registration) return { ageDays: null, registered: "Unknown" };
+    const ageDays = Math.round((Date.now() - new Date(registration.eventDate).getTime()) / 86400000);
+    return { ageDays, registered: registration.eventDate };
+  } catch {
+    return { ageDays: null, registered: "Unknown" };
+  }
+}
+
+function getSSLInfo(hostname) {
+  return new Promise((resolve) => {
+    const socket = tls.connect({ host: hostname, port: 443, servername: hostname, timeout: 5000, rejectUnauthorized: false }, () => {
+      const cert = socket.getPeerCertificate();
+      const validTo = new Date(cert.valid_to).getTime();
+      const validFrom = new Date(cert.valid_from).getTime();
+      const result = {
+        issuer: cert.issuer?.O || cert.issuer?.CN || "Unknown",
+        validFrom: cert.valid_from,
+        validTo: cert.valid_to,
+        daysRemaining: Math.round((validTo - Date.now()) / 86400000),
+        selfSigned: Boolean(cert.issuer?.CN && cert.issuer.CN === cert.subject?.CN),
+        authorized: socket.authorized
+      };
+      socket.end();
+      resolve(result);
+    });
+    socket.on("error", () => resolve({ error: true, issuer: "Unavailable" }));
+    socket.on("timeout", () => { socket.destroy(); resolve({ error: true, issuer: "Timeout" }); });
+  });
+}
+
+async function getDnsSecurity(hostname) {
+  const root = hostname.split(".").slice(-2).join(".");
+  const [spf, dmarc, mx] = await Promise.allSettled([
+    dns.resolveTxt(root),
+    dns.resolveTxt(`_dmarc.${root}`),
+    dns.resolveMx(root)
+  ]);
+  const spfRecords = spf.status === "fulfilled" ? spf.value.map((r) => r.join("")) : [];
+  const dmarcRecords = dmarc.status === "fulfilled" ? dmarc.value.map((r) => r.join("")) : [];
+  return {
+    hasSpf: spfRecords.some((r) => r.startsWith("v=spf1")),
+    hasDmarc: dmarcRecords.some((r) => r.startsWith("v=DMARC1")),
+    hasMx: mx.status === "fulfilled" && mx.value.length > 0
+  };
+}
+
+// Folds forensic signals into the heuristic score/details/flags/riskFactors shape from analyzer.js
+// so the extension UI renders them via the existing Signal Breakdown list with no extra plumbing.
+function applyForensicScoring({ score, riskFactors, details, flags, forensics }) {
+  let s = score;
+  const rf = [...riskFactors];
+  const { domainAge, dns: dnsSecurity } = forensics;
+
+  if (domainAge.ageDays !== null && domainAge.ageDays < 30) {
+    s += 25;
+    rf.push(`Domain registered only ${domainAge.ageDays} day(s) ago — newly created domains are commonly used for phishing`);
+    details["Domain Age"] = `${domainAge.ageDays} days — very new`;
+    flags["Domain Age"] = true;
+  } else {
+    details["Domain Age"] = domainAge.ageDays !== null ? `${domainAge.ageDays} days` : "Unknown";
+    flags["Domain Age"] = false;
+  }
+
+  if (!dnsSecurity.hasSpf && !dnsSecurity.hasDmarc) {
+    s += 5;
+    rf.push("Domain has no SPF/DMARC email authentication records — commonly abused for spoofed phishing emails");
+    details["Email Auth (SPF/DMARC)"] = "Missing";
+    flags["Email Auth (SPF/DMARC)"] = true;
+  } else {
+    details["Email Auth (SPF/DMARC)"] = `SPF: ${dnsSecurity.hasSpf ? "Yes" : "No"}, DMARC: ${dnsSecurity.hasDmarc ? "Yes" : "No"}`;
+    flags["Email Auth (SPF/DMARC)"] = false;
+  }
+
+  return { score: Math.max(0, Math.min(100, s)), riskFactors: rf, details, flags };
 }
 
 async function checkAbuseIPDB(hostname) {

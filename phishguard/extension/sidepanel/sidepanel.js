@@ -21,15 +21,12 @@ async function analyzeUrl(url) {
   document.getElementById("threatBadge").className = "threat-badge";
   showState("loading");
   try {
-    const res = await fetch(`${BACKEND}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url })
-    });
-    if (!res.ok) throw new Error("Server error");
-    const data = await res.json();
+    const res = await chrome.runtime.sendMessage({ type: "ANALYZE_URL", url });
+    if (!res || res.error || !res.data) throw new Error("Server error");
+    const data = res.data;
     currentData = data;
     renderResult(data);
+    loadAuditLog();
     runDeepScan(url);
   } catch (err) {
     document.getElementById("errorText").textContent =
@@ -58,7 +55,7 @@ async function runDeepScan(url) {
 }
 
 function renderResult(data) {
-  const { score, status, explanation, details, flags, intel } = data;
+  const { score, status, explanation, details, flags, intel, forensics } = data;
   const s = Math.max(0, Math.min(100, score));
 
   document.getElementById("scoreNum").textContent = s;
@@ -127,6 +124,23 @@ function renderResult(data) {
   const asnEl = document.getElementById("intelASN");
   asnEl.textContent = status === "safe" ? "Trusted" : status === "suspicious" ? "Unknown" : "Untrusted";
   asnEl.className = "intel-cell-value " + (status === "safe" ? "clean" : status === "suspicious" ? "warn" : "danger");
+
+  const domainAgeEl = document.getElementById("forDomainAge");
+  domainAgeEl.textContent = forensics?.domainAge?.ageDays != null ? `${forensics.domainAge.ageDays}d` : "Unknown";
+  domainAgeEl.className = "intel-cell-value " + (forensics?.domainAge?.ageDays != null && forensics.domainAge.ageDays < 30 ? "danger" : "clean");
+
+  const sslEl = document.getElementById("forSSL");
+  sslEl.textContent = forensics?.ssl?.issuer || "Unavailable";
+  sslEl.className = "intel-cell-value " + (forensics?.ssl?.error ? "warn" : "clean");
+
+  const sslExpiryEl = document.getElementById("forSSLExpiry");
+  sslExpiryEl.textContent = forensics?.ssl?.daysRemaining != null ? `${forensics.ssl.daysRemaining}d` : "N/A";
+  sslExpiryEl.className = "intel-cell-value " + (forensics?.ssl?.daysRemaining != null && forensics.ssl.daysRemaining < 14 ? "warn" : "clean");
+
+  const dnsEl = document.getElementById("forDns");
+  const hasAuth = forensics?.dns?.hasSpf || forensics?.dns?.hasDmarc;
+  dnsEl.textContent = hasAuth ? "Present" : "Missing";
+  dnsEl.className = "intel-cell-value " + (hasAuth ? "clean" : "warn");
 
   const signalList = document.getElementById("signalList");
   signalList.innerHTML = "";
@@ -250,3 +264,47 @@ function showState(state) {
   const map = { loading: "loadingState", result: "resultPanel", error: "errorState" };
   document.getElementById(map[state])?.classList.remove("hidden");
 }
+
+async function loadAuditLog() {
+  const { auditLog = [] } = await chrome.storage.local.get("auditLog");
+  const list = document.getElementById("auditList");
+  const recent = auditLog.slice(-8).reverse();
+  if (recent.length === 0) {
+    list.innerHTML = '<div class="signal-row"><span class="signal-name clean">No scans logged yet</span></div>';
+    return;
+  }
+  list.innerHTML = recent
+    .map((e) => {
+      const bad = e.status !== "safe";
+      const shortUrl = e.url.length > 40 ? e.url.slice(0, 37) + "..." : e.url;
+      return (
+        `<div class="signal-row">` +
+        `<span class="signal-name ${bad ? "bad" : "clean"}">${new Date(e.timestamp).toLocaleTimeString()} — ${shortUrl}</span>` +
+        `<span class="signal-pts ${bad ? "bad" : "ok"}">${e.score}</span>` +
+        `</div>`
+      );
+    })
+    .join("");
+}
+
+document.getElementById("verifyChainBtn").addEventListener("click", async () => {
+  const { auditLog = [] } = await chrome.storage.local.get("auditLog");
+  const valid = await pgVerifyChain(auditLog);
+  alert(
+    valid
+      ? `Chain integrity verified — ${auditLog.length} entries, no tampering detected.`
+      : "WARNING: audit chain integrity check FAILED — the log may have been tampered with."
+  );
+});
+
+document.getElementById("exportAuditBtn").addEventListener("click", async () => {
+  const { auditLog = [] } = await chrome.storage.local.get("auditLog");
+  const bundle = { tool: "PhishGuard Pro", exported: new Date().toISOString(), entries: auditLog };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "PhishGuard_Evidence_" + Date.now() + ".json";
+  a.click();
+});
+
+loadAuditLog();
