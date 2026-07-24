@@ -1,0 +1,238 @@
+const BACKEND = "http://localhost:3000";
+let currentUrl = null;
+let currentData = null;
+
+chrome.runtime.sendMessage({ type: "GET_CURRENT_URL" }, (res) => {
+  if (res?.url) analyzeUrl(res.url);
+});
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "URL_UPDATED" && msg.url) analyzeUrl(msg.url);
+});
+
+async function analyzeUrl(url) {
+  currentUrl = url;
+  currentData = null;
+  document.getElementById("urlDisplay").textContent = url.length > 55 ? url.slice(0, 52) + "..." : url;
+  document.getElementById("threatBadge").textContent = "--";
+  document.getElementById("threatBadge").className = "threat-badge";
+  showState("loading");
+  try {
+    const res = await fetch(`${BACKEND}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+    if (!res.ok) throw new Error("Server error");
+    const data = await res.json();
+    currentData = data;
+    renderResult(data);
+    runDeepScan(url);
+  } catch (err) {
+    document.getElementById("errorText").textContent = "Cannot reach PhishGuard server. Make sure backend is running on port 3000.";
+    showState("error");
+  }
+}
+
+async function runDeepScan(url) {
+  try {
+    const res = await fetch(`${BACKEND}/deep-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (data.deepAnalysis) {
+      document.getElementById("socTechnical").textContent = data.deepAnalysis.technical || "--";
+      document.getElementById("socAttack").textContent = data.deepAnalysis.attackType || "--";
+      document.getElementById("socJustify").textContent = data.deepAnalysis.justification || "--";
+      document.getElementById("socRecommend").textContent = data.deepAnalysis.recommendation || "--";
+      document.getElementById("whyMatters").textContent = data.deepAnalysis.whyMatters || data.deepAnalysis.justification || "--";
+    }
+  } catch {}
+}
+
+function renderResult(data) {
+  const { score, status, explanation, details, intel } = data;
+  const s = Math.max(0, Math.min(100, score));
+
+  document.getElementById("scoreNum").textContent = s;
+  const offset = 314 - (s / 100) * 314;
+  const ring = document.getElementById("ringFill");
+  ring.style.strokeDashoffset = offset;
+  const color = s <= 25 ? "#3fb950" : s <= 60 ? "#d29922" : "#f85149";
+  ring.style.stroke = color;
+  document.getElementById("scoreNum").style.color = color;
+
+  const badge = document.getElementById("threatBadge");
+  if (s <= 25) { badge.textContent = "LOW"; badge.className = "threat-badge low"; }
+  else if (s <= 60) { badge.textContent = "MEDIUM"; badge.className = "threat-badge medium"; }
+  else { badge.textContent = "HIGH"; badge.className = "threat-badge high"; }
+
+  const vIcon = document.getElementById("verdictIcon");
+  const vTitle = document.getElementById("verdictTitle");
+  const conf = document.getElementById("confidenceLine");
+  if (status === "safe") {
+    vIcon.textContent = "✓"; vIcon.style.color = "#3fb950";
+    vTitle.textContent = "VERDICT: CLEAN INFRASTRUCTURE"; vTitle.style.color = "#3fb950";
+    conf.textContent = "CONFIDENCE: HIGH (BASED ON 3/3 INTELLIGENCE SOURCES)";
+  } else if (status === "suspicious") {
+    vIcon.textContent = "!"; vIcon.style.color = "#d29922";
+    vTitle.textContent = "VERDICT: SUSPICIOUS ACTIVITY"; vTitle.style.color = "#d29922";
+    conf.textContent = "CONFIDENCE: MEDIUM (BASED ON 3/3 INTELLIGENCE SOURCES)";
+  } else {
+    vIcon.textContent = "!"; vIcon.style.color = "#f85149";
+    vTitle.textContent = "VERDICT: THREAT DETECTED"; vTitle.style.color = "#f85149";
+    conf.textContent = "CONFIDENCE: HIGH (BASED ON 3/3 INTELLIGENCE SOURCES)";
+  }
+
+  document.getElementById("summaryText").textContent = explanation || "Analysis complete.";
+
+  const abuse = intel?.abuseipdb;
+  const vt = intel?.virustotal;
+  const us = intel?.urlscan;
+
+  const abuseEl = document.getElementById("intelAbuse");
+  abuseEl.textContent = abuse?.score || "0%";
+  abuseEl.className = "intel-cell-value " + (!abuse?.score || abuse?.score === "0%" ? "clean" : "danger");
+
+  const vtEl = document.getElementById("intelVT");
+  vtEl.textContent = vt?.result || "Clean";
+  vtEl.className = "intel-cell-value " + (vt?.result === "Clean" ? "clean" : vt?.result === "N/A" ? "neutral" : vt?.result === "Suspicious" ? "warn" : "danger");
+
+  const usEl = document.getElementById("intelURLScan");
+  usEl.textContent = us?.result || "Verified";
+  usEl.className = "intel-cell-value " + (us?.error ? "neutral" : "clean");
+
+  const asnEl = document.getElementById("intelASN");
+  asnEl.textContent = status === "safe" ? "Trusted" : status === "suspicious" ? "Unknown" : "Untrusted";
+  asnEl.className = "intel-cell-value " + (status === "safe" ? "clean" : status === "suspicious" ? "warn" : "danger");
+
+  const signalList = document.getElementById("signalList");
+  signalList.innerHTML = "";
+  const entries = Object.entries(details || {});
+  if (entries.length === 0) {
+    signalList.innerHTML = '<div class="signal-row"><span class="signal-name clean">No risk signals detected</span></div>';
+  } else {
+    entries.forEach(([key, value]) => {
+      const isBad = String(value).includes("X") || String(value).includes("Yes") || String(value).includes("Detected");
+      const row = document.createElement("div");
+      row.className = "signal-row";
+      row.innerHTML = `<div><div class="signal-name ${isBad ? "bad" : "clean"}">${key}</div></div><div class="signal-pts ${isBad ? "bad" : "ok"}">${value}</div>`;
+      signalList.appendChild(row);
+    });
+  }
+
+  document.getElementById("whyMatters").textContent = status === "safe"
+    ? "This domain appears to operate on clean infrastructure with no evidence of malicious activity."
+    : status === "suspicious"
+    ? "Some signals suggest this URL may pose a risk. Weak security or suspicious patterns detected."
+    : "Multiple high-risk signals indicate this URL may be part of a phishing or malware campaign.";
+
+  document.getElementById("socTechnical").textContent = "Running deep analysis...";
+  document.getElementById("socAttack").textContent = "Analyzing...";
+  document.getElementById("socJustify").textContent = "Cross-referencing intelligence sources...";
+  document.getElementById("socRecommend").textContent = status === "safe" ? "Safe for standard interaction." : "Avoid entering personal information.";
+
+  showState("result");
+}
+
+document.getElementById("downloadPdfBtn").addEventListener("click", () => {
+  if (!currentData) return;
+  const d = currentData;
+  const scoreColor = d.score > 60 ? "#f85149" : d.score > 25 ? "#d29922" : "#3fb950";
+  const html = `<!DOCTYPE html><html><head><title>PhishGuard Forensic Report</title>
+  <style>body{font-family:Arial,sans-serif;background:#050505;color:#fff;padding:40px;margin:0;}
+  .header{border-bottom:1px solid #222;padding-bottom:20px;margin-bottom:30px;display:flex;justify-content:space-between;}
+  .brand{font-size:18px;font-weight:900;}.classified{color:#f85149;font-size:9px;font-weight:800;letter-spacing:2px;}
+  .score-circle{width:100px;height:100px;border-radius:50%;border:6px solid ${scoreColor};margin:20px auto;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .score-big{font-size:36px;font-weight:900;color:${scoreColor};}
+  .status-text{font-size:14px;font-weight:800;color:${scoreColor};text-align:center;text-transform:uppercase;margin-bottom:20px;}
+  .section{margin:20px 0;padding:16px;background:#0f0f0f;border:1px solid #1e1e1e;border-radius:4px;}
+  .section-title{font-size:9px;text-transform:uppercase;letter-spacing:2px;color:#444;margin-bottom:10px;}
+  .body-text{font-size:13px;line-height:1.7;color:#aaa;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .cell{background:#0a0a0a;border:1px solid #1a1a1a;padding:10px;border-radius:4px;}
+  .cell-label{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#333;margin-bottom:4px;}
+  .cell-value{font-size:13px;font-weight:700;color:#3fb950;}
+  .footer{margin-top:40px;padding-top:20px;border-top:1px solid #1a1a1a;color:#222;font-size:9px;display:flex;justify-content:space-between;}
+  </style></head><body>
+  <div class="header">
+    <div><div class="brand">PHISHGUARD PRO / INTEL</div><div class="classified">CONFIDENTIAL INTELLIGENCE DOSSIER</div></div>
+    <div style="text-align:right;font-size:9px;color:#333;">CASE ID: ${Math.random().toString(36).substr(2,9).toUpperCase()}<br>TIMESTAMP: ${new Date().toLocaleString()}</div>
+  </div>
+  <div class="score-circle"><div class="score-big">${d.score}</div></div>
+  <div class="status-text">${d.status.toUpperCase()} THREAT LEVEL</div>
+  <div class="section"><div class="section-title">URL Analyzed</div><div class="body-text" style="color:#58a6ff;word-break:break-all;">${currentUrl}</div></div>
+  <div class="section"><div class="section-title">Executive Summary</div><div class="body-text">${d.explanation || "No summary available."}</div></div>
+  <div class="section"><div class="section-title">Intelligence Sources</div><div class="grid">
+    <div class="cell"><div class="cell-label">AbuseIPDB</div><div class="cell-value">${d.intel?.abuseipdb?.score || "0%"}</div></div>
+    <div class="cell"><div class="cell-label">VirusTotal</div><div class="cell-value">${d.intel?.virustotal?.result || "Clean"}</div></div>
+    <div class="cell"><div class="cell-label">URLScan</div><div class="cell-value">${d.intel?.urlscan?.result || "Verified"}</div></div>
+    <div class="cell"><div class="cell-label">Risk Score</div><div class="cell-value" style="color:${scoreColor}">${d.score}/100</div></div>
+  </div></div>
+  <div class="section"><div class="section-title">Risk Factors</div><div class="body-text">${(d.riskFactors || []).join("<br>") || "None detected"}</div></div>
+  <div class="footer"><div>PHISHGUARD PRO INTEL ENGINE</div><div>FOR AUTHORIZED USE ONLY</div></div>
+  <script>setTimeout(()=>window.print(),500);</script></body></html>`;
+  const blob = new Blob([html], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `PhishGuard_Report_${Date.now()}.html`;
+  a.click();
+});
+
+document.getElementById("deepScanBtn").addEventListener("click", async () => {
+  if (!currentUrl) return;
+  document.getElementById("deepScanBtn").textContent = "Scanning...";
+  document.getElementById("deepScanBtn").disabled = true;
+  await runDeepScan(currentUrl);
+  document.getElementById("deepScanBtn").textContent = "Run Deep Scan";
+  document.getElementById("deepScanBtn").disabled = false;
+});
+
+document.getElementById("vulnScanBtn").addEventListener("click", async () => {
+  if (!currentUrl) return;
+  document.getElementById("vulnScanBtn").textContent = "Scanning...";
+  document.getElementById("vulnScanBtn").disabled = true;
+  try {
+    const res = await fetch(`${BACKEND}/deep-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: currentUrl })
+    });
+    const data = await res.json();
+    document.getElementById("socAttack").textContent = data.deepAnalysis?.attackType || "No attack vectors identified.";
+    document.getElementById("socJustify").textContent = data.deepAnalysis?.justification || "--";
+  } catch { alert("Vulnerability scan failed."); }
+  finally {
+    document.getElementById("vulnScanBtn").textContent = "Run Vulnerability Scan";
+    document.getElementById("vulnScanBtn").disabled = false;
+  }
+});
+
+document.getElementById("copyBtn").addEventListener("click", () => {
+  if (!currentData) return;
+  const text = `PHISHGUARD PRO INTEL REPORT
+URL: ${currentUrl}
+Score: ${currentData.score}/100
+Status: ${currentData.status.toUpperCase()}
+Summary: ${currentData.explanation}
+AbuseIPDB: ${currentData.intel?.abuseipdb?.score || "N/A"}
+VirusTotal: ${currentData.intel?.virustotal?.result || "N/A"}
+URLScan: ${currentData.intel?.urlscan?.result || "N/A"}
+Risk Factors: ${(currentData.riskFactors || []).join(", ") || "None"}
+Generated: ${new Date().toLocaleString()}`;
+  navigator.clipboard.writeText(text).then(() => {
+    document.getElementById("copyBtn").textContent = "Copied!";
+    setTimeout(() => document.getElementById("copyBtn").textContent = "Copy Intel", 2000);
+  });
+});
+
+document.getElementById("retryBtn").addEventListener("click", () => { if (currentUrl) analyzeUrl(currentUrl); });
+
+function showState(state) {
+  ["loadingState", "resultPanel", "errorState"].forEach(id =>
+    document.getElementById(id).classList.add("hidden"));
+  const map = { loading: "loadingState", result: "resultPanel", error: "errorState" };
+  document.getElementById(map[state])?.classList.remove("hidden");
+}

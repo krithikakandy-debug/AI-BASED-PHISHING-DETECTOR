@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>PhishGuard Pro</title>
+<link rel="stylesheet" href="sidepanel.css"/>
+</head>
+<body>
+<div class="panel">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="shield-icon">P</div>
+      <span class="brand">PhishGuard Pro</span>
+    </div>
+    <span class="threat-badge" id="threatBadge">--</span>
+  </div>
+
+  <!-- URL BAR -->
+  <div class="url-bar">
+    <span class="url-label">Evaluating</span>
+    <span class="url-text" id="urlDisplay">Waiting for page...</span>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loadingState" class="loading-state">
+    <div class="spinner"></div>
+    <p class="loading-text">Scanning intelligence sources...</p>
+  </div>
+
+  <!-- RESULT -->
+  <div id="resultPanel" class="result hidden">
+
+    <!-- Score Ring -->
+    <div class="score-wrap">
+      <div class="score-ring-container">
+        <svg viewBox="0 0 120 120" class="score-svg">
+          <circle class="ring-bg" cx="60" cy="60" r="50"/>
+          <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="50"
+            stroke-dasharray="314" stroke-dashoffset="314"/>
+        </svg>
+        <div class="score-inner">
+          <span class="score-number" id="scoreNum">0</span>
+          <span class="score-label-text">RISK LEVEL</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verdict -->
+    <div class="verdict-block">
+      <div class="verdict-line">
+        <span class="verdict-check" id="verdictIcon">✓</span>
+        <span class="verdict-text" id="verdictTitle">VERDICT: ANALYZING...</span>
+      </div>
+      <div class="confidence-line" id="confidenceLine">
+        CONFIDENCE: ANALYZING (BASED ON 3/3 INTELLIGENCE SOURCES)
+      </div>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="section">
+      <div class="section-header">
+        <span class="dot red"></span> EXECUTIVE SUMMARY
+      </div>
+      <p class="section-body" id="summaryText">Analyzing...</p>
+    </div>
+
+    <!-- Intelligence Sources -->
+    <div class="section">
+      <div class="section-header">
+        <span class="dot red"></span> INTELLIGENCE SOURCES
+      </div>
+      <div class="intel-grid">
+        <div class="intel-cell">
+          <div class="intel-cell-label">ABUSEIPDB</div>
+          <div class="intel-cell-value" id="intelAbuse">--</div>
+        </div>
+        <div class="intel-cell">
+          <div class="intel-cell-label">VIRUSTOTAL</div>
+          <div class="intel-cell-value" id="intelVT">--</div>
+        </div>
+        <div class="intel-cell">
+          <div class="intel-cell-label">URLSCAN</div>
+          <div class="intel-cell-value" id="intelURLScan">--</div>
+        </div>
+        <div class="intel-cell">
+          <div class="intel-cell-label">ASN TRUST</div>
+          <div class="intel-cell-value" id="intelASN">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signal Breakdown -->
+    <div class="section">
+      <div class="section-header">
+        <span class="dot red"></span> SIGNAL BREAKDOWN
+      </div>
+      <div id="signalList"></div>
+    </div>
+
+    <!-- Why This Matters -->
+    <div class="section">
+      <div class="section-header">
+        <span class="lightning">⚡</span> WHY THIS MATTERS
+      </div>
+      <p class="section-body" id="whyMatters">Analyzing risk context...</p>
+    </div>
+
+    <!-- SOC Intelligence Analysis -->
+    <div class="section">
+      <div class="section-header soc-header">SOC INTELLIGENCE ANALYSIS</div>
+
+      <div class="soc-block">
+        <div class="soc-item-title"><span class="soc-icon">⚡</span> Technical Analysis</div>
+        <div class="soc-item-body" id="socTechnical">--</div>
+      </div>
+
+      <div class="soc-block">
+        <div class="soc-item-title"><span class="soc-icon warn">⚠</span> Attack Type</div>
+        <div class="soc-item-body" id="socAttack">--</div>
+      </div>
+
+      <div class="soc-block">
+        <div class="soc-item-title"><span class="soc-icon">📋</span> Risk Justification</div>
+        <div class="soc-item-body" id="socJustify">--</div>
+      </div>
+
+      <div class="soc-block">
+        <div class="soc-item-title"><span class="soc-icon safe">🛡</span> Recommendation</div>
+        <div class="soc-item-body" id="socRecommend">--</div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions">
+      <button class="btn btn-white" id="downloadPdfBtn">&#11015; Download Forensic PDF</button>
+      <button class="btn btn-dark" id="deepScanBtn">&#128269; Run Deep Scan</button>
+      <button class="btn btn-danger" id="vulnScanBtn">&#128308; Run Vulnerability Scan</button>
+      <button class="btn btn-dark" id="copyBtn">&#128203; Copy Intel</button>
+    </div>
+
+    <!-- Auto Intel indicator -->
+    <div class="auto-intel">
+      <span class="pulse-dot"></span> Autonomous Intelligence Active
+    </div>
+
+  </div>
+
+  <!-- ERROR -->
+  <div id="errorState" class="error-state hidden">
+    <div class="error-icon">!</div>
+    <p id="errorText">Could not reach analysis server.</p>
+    <button class="btn btn-dark" id="retryBtn">Retry</button>
+  </div>
+
+</div>
+<script src="sidepanel.js"></script>
+</body>
+</html>

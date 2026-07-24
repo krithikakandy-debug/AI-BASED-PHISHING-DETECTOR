@@ -1,0 +1,12 @@
+/* PhishGuard Root Sidebar Container */
+#phishguard-sidebar-root {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 2147483647;
+    pointer-events: none; /* Let clicks pass through unless on the container itself */
+}
+
+#phishguard-sidebar-root * {
+    pointer-events: auto; /* Re-enable for child elements */
+}

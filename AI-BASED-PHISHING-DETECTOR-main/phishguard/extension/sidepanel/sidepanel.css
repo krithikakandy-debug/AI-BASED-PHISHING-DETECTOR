@@ -1,0 +1,102 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0a; color: #fff; font-family: "Segoe UI", sans-serif; font-size: 13px; }
+.panel { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* HEADER */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #0f0f0f; border-bottom: 1px solid #1e1e1e; }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.shield-icon { background: #fff; color: #000; font-weight: 900; font-size: 10px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+.brand { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: -0.2px; }
+.threat-badge { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 3px; letter-spacing: 1.5px; text-transform: uppercase; }
+.threat-badge.low { background: rgba(63,185,80,0.1); color: #3fb950; border: 1px solid rgba(63,185,80,0.25); }
+.threat-badge.medium { background: rgba(210,153,34,0.1); color: #d29922; border: 1px solid rgba(210,153,34,0.25); }
+.threat-badge.high { background: rgba(248,81,73,0.1); color: #f85149; border: 1px solid rgba(248,81,73,0.25); }
+
+/* URL BAR */
+.url-bar { padding: 7px 14px; background: #080808; border-bottom: 1px solid #1a1a1a; }
+.url-label { display: block; font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: #333; margin-bottom: 2px; }
+.url-text { display: block; font-size: 10px; color: #58a6ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* LOADING */
+.loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 80px 20px; }
+.spinner { width: 36px; height: 36px; border: 2px solid #1e1e1e; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 11px; color: #333; letter-spacing: 1px; text-transform: uppercase; }
+
+/* RESULT */
+.result { display: flex; flex-direction: column; overflow-y: auto; }
+
+/* SCORE RING */
+.score-wrap { display: flex; justify-content: center; padding: 20px 14px 12px; }
+.score-ring-container { position: relative; width: 100px; height: 100px; }
+.score-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: #151515; stroke-width: 10; }
+.ring-fill { fill: none; stroke: #3fb950; stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 1s ease, stroke 0.4s ease; }
+.score-inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.score-number { font-size: 28px; font-weight: 900; line-height: 1; }
+.score-label-text { font-size: 7px; letter-spacing: 2px; color: #333; margin-top: 2px; text-transform: uppercase; }
+
+/* VERDICT */
+.verdict-block { padding: 0 14px 14px; border-bottom: 1px solid #151515; }
+.verdict-line { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.verdict-check { font-size: 16px; }
+.verdict-text { font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
+.confidence-line { font-size: 8px; color: #333; letter-spacing: 1px; text-transform: uppercase; padding-left: 24px; }
+
+/* SECTIONS */
+.section { padding: 12px 14px; border-bottom: 1px solid #111; }
+.section-header { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: #333; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.soc-header { color: #555; margin-bottom: 12px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot.red { background: #f85149; }
+.lightning { font-size: 11px; }
+.section-body { font-size: 12px; line-height: 1.7; color: #aaa; }
+
+/* INTEL GRID */
+.intel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.intel-cell { background: #0f0f0f; border: 1px solid #1a1a1a; border-radius: 4px; padding: 10px; }
+.intel-cell-label { font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; color: #333; margin-bottom: 5px; }
+.intel-cell-value { font-size: 13px; font-weight: 700; }
+.intel-cell-value.clean { color: #3fb950; }
+.intel-cell-value.danger { color: #f85149; }
+.intel-cell-value.warn { color: #d29922; }
+.intel-cell-value.neutral { color: #555; }
+
+/* SIGNAL BREAKDOWN */
+.signal-row { display: flex; align-items: flex-start; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #0f0f0f; gap: 8px; }
+.signal-row:last-child { border-bottom: none; }
+.signal-name { font-size: 11px; font-weight: 700; }
+.signal-name.clean { color: #3fb950; }
+.signal-name.warn { color: #d29922; }
+.signal-name.bad { color: #f85149; }
+.signal-desc { font-size: 10px; color: #333; margin-top: 2px; line-height: 1.4; }
+.signal-pts { font-size: 10px; font-weight: 800; white-space: nowrap; }
+.signal-pts.bad { color: #f85149; }
+.signal-pts.ok { color: #3fb950; }
+
+/* SOC */
+.soc-block { margin-bottom: 12px; }
+.soc-item-title { font-size: 11px; font-weight: 700; color: #ccc; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.soc-icon { font-size: 12px; }
+.soc-icon.warn { color: #d29922; }
+.soc-icon.safe { color: #3fb950; }
+.soc-item-body { font-size: 11px; color: #555; line-height: 1.6; padding-left: 18px; }
+
+/* ACTIONS */
+.actions { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.btn { width: 100%; padding: 11px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; letter-spacing: 0.3px; transition: opacity 0.15s; text-align: center; }
+.btn:hover { opacity: 0.8; }
+.btn-white { background: #ffffff; color: #000; }
+.btn-dark { background: #141414; color: #fff; border: 1px solid #2a2a2a; }
+.btn-danger { background: #1a0505; color: #f85149; border: 1px solid #3d1010; }
+
+/* AUTO INTEL */
+.auto-intel { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; font-size: 9px; color: #222; text-transform: uppercase; letter-spacing: 1px; }
+.pulse-dot { width: 6px; height: 6px; background: #3fb950; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ERROR */
+.error-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 60px 20px; text-align: center; }
+.error-icon { width: 40px; height: 40px; border-radius: 50%; background: #1a0505; border: 1px solid #f85149; color: #f85149; font-size: 20px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+
+.hidden { display: none !important; }
