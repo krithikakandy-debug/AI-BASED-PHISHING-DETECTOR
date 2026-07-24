@@ -1,4 +1,5 @@
-﻿require("dotenv").config();
+require("dotenv").config();
+const dns = require("dns").promises;
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
@@ -16,24 +17,24 @@ app.post("/analyze", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "Missing url" });
   console.log(`[PhishGuard] Analyzing: ${url}`);
-  const { score, riskFactors, details } = analyzeUrl(url);
+  const { score, riskFactors, details, flags } = analyzeUrl(url);
   const status = scoreToStatus(score);
   const [intel, explanation] = await Promise.all([
     getIntelligence(url),
     getAiExplanation({ url, score, status, riskFactors })
   ]);
-  res.json({ score, status, explanation, details, intel, riskFactors });
+  res.json({ score, status, explanation, details, flags, intel, riskFactors });
 });
 
 app.post("/deep-scan", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "Missing url" });
   console.log(`[PhishGuard] Deep scan: ${url}`);
-  const { score, riskFactors, details } = analyzeUrl(url);
+  const { score, riskFactors, details, flags } = analyzeUrl(url);
   const status = scoreToStatus(score);
   const intel = await getIntelligence(url);
   const deepAnalysis = await getDeepAnalysis({ url, score, status, riskFactors, intel });
-  res.json({ score, status, details, intel, riskFactors, deepAnalysis });
+  res.json({ score, status, details, flags, intel, riskFactors, deepAnalysis });
 });
 
 async function getIntelligence(url) {
@@ -55,8 +56,10 @@ async function checkAbuseIPDB(hostname) {
   const key = process.env.ABUSEIPDB_API_KEY;
   if (!key) return { score: "0%", totalReports: 0 };
   try {
+    const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+    const ip = isIp ? hostname : (await dns.lookup(hostname)).address;
     const res = await axios.get("https://api.abuseipdb.com/api/v2/check", {
-      params: { ipAddress: hostname, maxAgeInDays: 90 },
+      params: { ipAddress: ip, maxAgeInDays: 90 },
       headers: { Key: key, Accept: "application/json" },
       timeout: 5000
     });
